@@ -10,12 +10,11 @@ let fu = null, fmode = "in", fmail = "", fRefresh = () => {}, fRoles = {};
 const reload = () => go(location.hash.slice(1) || "forum");
 db.auth.onAuthStateChange((ev, s) => {
   const id = s?.user?.id || null;
-  if (id === (fu?.id || null)) return;               // токен обновился, ничего не меняется
+  if (id === (fu?.id || null)) return;               
   fu = s?.user || null;
   if (location.hash.startsWith("#forum")) setTimeout(reload, 0);
 });
 
-/* Сжатие картинки: ≤1280px, JPEG ≤900 КБ. Заодно убирает EXIF и геометки. */
 async function shrink(file) {
   if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw bad("Только jpg, png или webp.");
   if (file.size > 8 * 1048576) throw bad("Файл слишком большой (до 8 МБ).");
@@ -27,7 +26,6 @@ async function shrink(file) {
   throw bad("Не удалось сжать картинку.");
 }
 
-/* ---------- вход и регистрация ---------- */
 function authCard() {
   const box = h("div", {class:"door"}), msg = h("div", {class:"msg err", role:"alert"});
   const em = h("input", {type:"email", placeholder:"Почта", autocomplete:"email", maxlength:120, value:fmail});
@@ -59,7 +57,7 @@ function authCard() {
     if (fmode === "in") {
       const { error } = await db.auth.signInWithPassword({email:fmail, password:pw.value});
       if (error) {
-        if (/confirm/i.test(error.message)) { await db.auth.resend({type:"signup", email:fmail}); fmode = "verify"; reload(); return; } // почта ещё не подтверждена
+        if (/confirm/i.test(error.message)) { await db.auth.resend({type:"signup", email:fmail}); fmode = "verify"; reload(); return; }
         throw bad("Неверная почта или пароль.");
       }
       return;
@@ -74,7 +72,6 @@ function authCard() {
   return box;
 }
 
-/* ---------- иконки (только мои константы, пользовательский текст сюда не попадает) ---------- */
 const ICONS = {
   heart:'<svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.2-9.3C1.7 8 3.6 5 6.8 5c1.9 0 3.5 1 5.2 3 1.7-2 3.3-3 5.2-3 3.2 0 5.1 3 4 6.2-1.7 4.7-9.2 9.3-9.2 9.3z"/></svg>',
   comment:'<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.7 7L4 20.5l1.5-4.9A8 8 0 1 1 21 12z"/></svg>',
@@ -111,7 +108,6 @@ async function cropAvatar(file) {
   const b = await new Promise(r => c.toBlob(r, "image/jpeg", .86)); if (!b) throw bad("Не удалось обработать картинку."); return b;
 }
 
-/* ---------- редактирование профиля ---------- */
 function editProfile(mine, done) {
   const bd = h("div", {class:"sheet-bd"}); let blob = null, url = null;
   const close = () => { if (url) URL.revokeObjectURL(url); document.removeEventListener("keydown", esc); bd.remove(); };
@@ -150,7 +146,6 @@ function editProfile(mine, done) {
   document.body.append(bd);
 }
 
-/* ---------- окно написания (выезжает снизу) ---------- */
 function sheet(parent, done) {
   const key = parent || "root", bd = h("div", {class:"sheet-bd"}); let url = null;
   const close = () => { fdraft[key] = ta.value; if (url) URL.revokeObjectURL(url); document.removeEventListener("keydown", esc); bd.remove(); };
@@ -182,13 +177,11 @@ function sheet(parent, done) {
   document.body.append(bd); upd(); ta.focus();
 }
 
-/* нижняя строка сообщений */
 function msgBar(label, onclick) {
   document.getElementById("fbar")?.remove(); if (!label) return;
   document.body.append(h("div", {id:"fbar"}, h("button", {type:"button", onclick}, ic("pen"), h("span", {}, label))));
 }
 
-/* ---------- пост или комментарий ---------- */
 function postCard(p, liked, c) {
   const pr = p.forum_profiles || {}, u = pr.username || "?", role = fRoles[u], img = IMG_RE.test(p.image_path || "") ? pubUrl(p.image_path) : null;
   let n = p.likes?.[0]?.count || 0, on = liked;
@@ -219,7 +212,6 @@ function postCard(p, liked, c) {
       p.body ? h("div", {class:"tw-txt"}, p.body) : null, im, act));
 }
 
-/* ---------- страница форума ---------- */
 async function forum(box) {
   const { data: { session } } = await db.auth.getSession(); fu = session?.user || null;
   const rl = await db.rpc("staff_public"); fRoles = Object.fromEntries((rl.data || []).map(x => [x.nickname, x.role]));
@@ -240,7 +232,10 @@ async function forum(box) {
   const C = {open:p => to(() => showThread(p), "p/" + p.id), reply:p => write(p.id, refresh), after:refresh, prof:name => to(() => showProfile(name), "u/" + name)};
   const skel = n => h("div", {}, ...Array.from({length:n}, () => h("div", {class:"tw-row sk-row"}, h("div", {class:"av sk"}), h("div", {class:"tw-main"}, h("div", {class:"sk l1"}), h("div", {class:"sk l2"}), h("div", {class:"sk l3"})))));
   const backHdr = t => h("div", {class:"fh"}, h("button", {class:"ib", type:"button", "aria-label":"Назад", onclick:back}, ic("back")), h("b", {}, t));
-  const empty = t => h("p", {class:"empty", style:"padding:1.2rem .9rem"}, t);
+  
+  // ИСПРАВЛЕНИЕ: если текст пустой (undefined/null), элемент создаваться не будет, убирая "null" и лишний текст на экране входа
+  const empty = t => t ? h("p", {class:"empty", style:"padding:1.2rem .9rem"}, t) : h("div");
+  
   const setBell = n => { if (bell) { bell.textContent = n > 9 ? "9+" : n; bell.style.display = n ? "" : "none"; } };
 
   const page = async (list, off, c, filt, emptyT, asc) => {
@@ -249,7 +244,10 @@ async function forum(box) {
     let liked = new Set();
     if (fu && data.length) { const { data: l } = await db.from("likes").select("post_id").eq("user_id", fu.id).in("post_id", data.map(x => x.id)); liked = new Set((l || []).map(x => x.post_id)); }
     data.forEach((p, i) => { const r = postCard(p, liked.has(p.id), c); r.style.setProperty("--i", Math.min(i, 8)); list.append(r); });
-    if (!off && !data.length) list.append(empty(emptyT));
+    
+    // ИСПРАВЛЕНИЕ: передаем пустой текст на экран входа (когда нет пользователя), чтобы текст "Пока тихо..." не выводился
+    if (!off && !data.length) list.append(empty(fu ? emptyT : null));
+    
     return data.length;
   };
   const moreBtn = () => h("button", {class:"ghost", style:"margin:.9rem auto;display:block"}, "Показать ещё");
@@ -268,15 +266,6 @@ async function forum(box) {
     };
     return h("div", {class:"tw-row", onclick:() => C.prof(pr.username)}, h("div", {class:"avcol"}, avatar(pr, "avlink")),
       h("div", {class:"tw-main"}, h("div", {class:"tw-top"}, h("b", {}, nameOf(pr)), h("span", {class:"meta"}, "@" + pr.username)), pr.bio ? h("div", {class:"tw-txt"}, pr.bio) : null), fu?.id === pr.id ? null : b);
-  };
-  const people = (load, emptyT) => {
-    const list = h("div"), more = moreBtn(); let off = 0;
-    const next = async () => {
-      more.disabled = true; const rows = await load(off), set = await mySet(rows.map(r => r.id));
-      rows.forEach((r, i) => { const e = personRow(r, set); e.style.setProperty("--i", Math.min(i, 8)); list.append(e); });
-      if (!off && !rows.length) list.append(empty(emptyT)); off += rows.length; more.disabled = false; more.style.display = rows.length < 30 ? "none" : "block";
-    };
-    more.onclick = next; next(); return h("div", {}, list, more);
   };
 
   async function showFeed() {
