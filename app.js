@@ -1,7 +1,7 @@
 "use strict";
 const SB_URL = "https://swdmjwgwripgpcnglhse.supabase.co";
 const SB_KEY = "sb_publishable_hv4OhCNL1n8A5pbs526FpQ_hX7o6xmb";
-const SITE_VERSION = "2.22";
+const SITE_VERSION = "2.24";
 const TITLE = "Достижения DOORS: помощь с ачивками — DorsoTic";
 const ROLE = {moderator:"Модератор", admin:"Админ", owner:"Владелец"};
 const ST = {new:"Новая", in_progress:"Выполняется", waiting:"Ожидание", closed:"Закрыта"};
@@ -9,6 +9,9 @@ const PL = {discord:"Discord", telegram:"Telegram"};
 let FPATH = "";
 const ROUTES = ["home", "info", "team", "forum", "market", "update", "collab", "staff", "login"];
 const WARN = "Перед тем как отправить заявку, убедитесь, что вы выбрали достижение, которое нужно. Просим вас не выбирать случайное достижение и не писать в комментарии о другом, которого нет в списке. Если вы так поступите, ваша заявка будет удалена.";
+
+/* своя картинка вместо тыквы: положите pumpkin.png рядом с index.html */
+(() => { const im = new Image(); im.onload = () => { document.documentElement.style.setProperty("--pk", 'url("pumpkin.png")'); document.documentElement.classList.add("has-pk"); }; im.src = "pumpkin.png"; })();
 
 const $ = id => document.getElementById(id);
 const h = (t, p = {}, ...k) => {
@@ -103,9 +106,10 @@ async function loadMe() {
 const ICON_EXT = ["png", "svg", "webp", "jpg", "jpeg", "gif"]; // иконки меню: icons/<вкладка>.<формат>; пока файла нет, показывается символ
 const navIcon = (v, sym) => {
   const s = h("span", {class:"ni", "aria-hidden":"true"}, sym), im = new Image(); let i = 0; im.alt = ""; im.className = "ic";
+  const src = () => i < ICON_EXT.length ? `icons/${v}.${ICON_EXT[i]}` : i === ICON_EXT.length && v === "collab" ? "pumpkin.png" : null; // у «Коллаба» запасной вариант — общая картинка pumpkin.png
   im.onload = () => s.replaceChildren(im);
-  im.onerror = () => { if (++i < ICON_EXT.length) im.src = `icons/${v}.${ICON_EXT[i]}`; };
-  im.src = `icons/${v}.${ICON_EXT[0]}`; return s;
+  im.onerror = () => { i++; const n = src(); if (n) im.src = n; };
+  im.src = src(); return s;
 };
 function drawNav() {
   const nb = (v, sym, l) => h("button", {"data-v":v, onclick:() => go(v)}, navIcon(v, sym), h("span", {}, l));
@@ -195,36 +199,18 @@ function updateView(box) {
   );
 }
 
-/* ---------- коллаб (отчёт до 24 октября) ---------- */
-const COLLAB = {end:"2026-10-24T00:00:00+03:00", title:"Коллаб", text:"Хеллоуинский коллаб DOORS"}; // время МСК (UTC+3); картинка (необязательно): collab.webp
+/* ---------- коллаб: только таймер до начала ---------- */
+const COLLAB = {start:"2026-10-24T00:00:00+03:00"}; // время МСК (UTC+3)
 function collabView(box) {
-  const t1 = Date.parse(COLLAB.end);
+  const t0 = Date.parse(COLLAB.start);
   const nums = ["дней", "часов", "минут", "секунд"].map(l => { const n = h("span", {}, "00"); return {n, el:h("div", {class:"stat"}, n, l)}; });
-  const cap = h("div", {class:"sub", style:"margin:.2rem 0 0"}), state = h("div", {class:"warning-caption", style:"margin-top:.9rem"});
-  const when = d => new Date(d).toLocaleString("ru-RU", {dateStyle:"long", timeStyle:"short"});
   const tick = () => {
-    const now = Date.now(), run = now < t1, left = run ? t1 - now : 0;
-    const s = Math.floor(left / 1000), v = [Math.floor(s / 86400), Math.floor(s % 86400 / 3600), Math.floor(s % 3600 / 60), s % 60];
+    const s = Math.max(0, Math.floor((t0 - Date.now()) / 1000)), v = [Math.floor(s / 86400), Math.floor(s % 86400 / 3600), Math.floor(s % 3600 / 60), s % 60];
     nums.forEach((x, i) => x.n.textContent = String(v[i]).padStart(2, "0"));
-    state.textContent = run ? "До конца коллаба" : "Коллаб завершился";
-    cap.textContent = (run ? "Закончится: " : "Закончился: ") + when(t1);
-    state.classList.toggle("live", run);
   };
   tick(); clearInterval(timer); timer = setInterval(tick, 1000);
-  document.title = COLLAB.title + " — " + TITLE;
-  const img = h("img", {src:"collab.webp", alt:COLLAB.title, class:"cv-img"});
-  img.onerror = () => img.remove();
-  box.append(
-    h("h1", {}, COLLAB.title),
-    h("p", {class:"sub"}, COLLAB.text),
-    h("div", {class:"door cv"},
-      img,
-      state,
-      h("div", {class:"stats cd"}, nums.map(x => x.el)),
-      cap,
-      h("p", {class:"meta", style:"text-align:center;margin-top:.7rem"}, "Подробности скоро…")
-    )
-  );
+  document.title = "Коллаб — " + TITLE;
+  box.append(h("div", {class:"stats cd"}, nums.map(x => x.el)));
 }
 
 /* ---------- выбор достижений ---------- */
@@ -659,6 +645,16 @@ async function subBlacklist(box) {
 window.addEventListener("popstate", () => { const hs = location.hash.slice(1); if (hs === "team" && document.querySelector(".sheet-bd.hl, .sheet-bd.hs")) return closeSheet(); go(hs); });
 db.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT" && me) { me = null; drawNav(); go("login"); } });
 $("logo").onclick = () => go("home");
+/* пасхалка: тыква в логотипе вздрагивает, а после 5 нажатий открывается чат в Telegram */
+(() => {
+  const pk = $("pkbtn"); if (!pk) return; let n = 0, t = 0;
+  pk.addEventListener("click", e => {
+    e.stopPropagation(); clearTimeout(t); n++;
+    pk.classList.remove("shake"); void pk.offsetWidth; pk.classList.add("shake");
+    if (n >= 5) { n = 0; const a = h("a", {href:"https://t.me/Doors_Roblox_Chat_RU", target:"_blank", rel:"noopener noreferrer"}); document.body.append(a); a.click(); a.remove(); return; }
+    t = setTimeout(() => { n = 0; }, 3000); // пауза больше 3 секунд сбрасывает счёт
+  });
+})();
 (async () => {
   const m = location.hash.match(/^#t=([0-9a-f-]{36})$/i);
   if (m) { if (!toks().includes(m[1])) saveToks([...toks(), m[1]]); history.replaceState(null, "", location.pathname); }
